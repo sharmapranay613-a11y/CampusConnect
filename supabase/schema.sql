@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS public.borrow_requests (
   item_id UUID NOT NULL REFERENCES public.items(id) ON DELETE CASCADE,
   borrower_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   owner_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  borrower_phone TEXT,
   status TEXT NOT NULL CHECK (status IN ('pending', 'approved', 'rejected')),
   created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
   updated_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL

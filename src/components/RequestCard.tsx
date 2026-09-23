@@ -1,7 +1,7 @@
 import React from 'react';
 import type { BorrowRequest } from '../types/index.js';
 import { ItemPlaceholderImage } from './ItemPlaceholderImage.js';
-import { Check, X, Calendar, User, Clock, AlertCircle } from 'lucide-react';
+import { Check, X, Calendar, User, Clock, AlertCircle, Phone } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 interface Props {
@@ -110,6 +110,32 @@ export const RequestCard: React.FC<Props> = ({
                 <span>Pickup: {item.pickup_location}</span>
                 <span className="mx-1.5 text-slate-300">|</span>
                 <span>Duration: {item.borrow_duration}</span>
+              </div>
+            )}
+
+            {/* Borrower Contact Phone */}
+            {(request.borrower_phone || request.phone_number) && (
+              <div className="mt-2.5 flex items-center gap-2 text-xs">
+                {isOwnerView ? (
+                  <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-indigo-50 border border-indigo-100 text-indigo-900 font-medium">
+                    <Phone className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                    <span className="text-slate-500">Borrower Phone:</span>
+                    <a
+                      href={`tel:${request.borrower_phone || request.phone_number}`}
+                      className="font-semibold text-indigo-700 hover:text-indigo-900 underline underline-offset-2"
+                    >
+                      {request.borrower_phone || request.phone_number}
+                    </a>
+                  </div>
+                ) : (
+                  <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-50 border border-slate-100 text-slate-700">
+                    <Phone className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <span className="text-slate-500">Your Phone:</span>
+                    <span className="font-semibold text-slate-800">
+                      {request.borrower_phone || request.phone_number}
+                    </span>
+                  </div>
+                )}
               </div>
             )}
           </div>

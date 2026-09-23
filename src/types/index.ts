@@ -37,6 +37,8 @@ export interface BorrowRequest {
   borrower_id: string;
   owner_id: string;
   status: RequestStatus;
+  borrower_phone?: string;
+  phone_number?: string;
   created_at: string;
   updated_at: string;
   item?: Item;

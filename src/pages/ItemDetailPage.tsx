@@ -14,6 +14,7 @@ import {
   AlertCircle,
   Loader2,
   Send,
+  Phone,
 } from 'lucide-react';
 
 export const ItemDetailPage: React.FC = () => {
@@ -26,6 +27,7 @@ export const ItemDetailPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   const [requesting, setRequesting] = useState(false);
+  const [borrowerPhone, setBorrowerPhone] = useState('');
   const [requestSuccess, setRequestSuccess] = useState<string | null>(null);
   const [requestError, setRequestError] = useState<string | null>(null);
   const [existingRequest, setExistingRequest] = useState<BorrowRequest | null>(null);
@@ -50,6 +52,9 @@ export const ItemDetailPage: React.FC = () => {
           const found = myRequests.find((r) => r.item_id === itemId);
           if (found) {
             setExistingRequest(found);
+            if (found.borrower_phone) {
+              setBorrowerPhone(found.borrower_phone);
+            }
           }
         } catch (e) {
           // Non-blocking
@@ -69,12 +74,17 @@ export const ItemDetailPage: React.FC = () => {
     }
     if (!item) return;
 
+    if (!borrowerPhone.trim()) {
+      setRequestError('Please provide your phone number so the item owner can coordinate pickup with you.');
+      return;
+    }
+
     try {
       setRequesting(true);
       setRequestError(null);
-      const res = await api.requests.create(item.id);
+      const res = await api.requests.create(item.id, borrowerPhone.trim());
       setExistingRequest(res);
-      setRequestSuccess('Borrow request submitted! The owner has been notified.');
+      setRequestSuccess('Borrow request submitted! The owner has been notified with your contact details.');
     } catch (err: any) {
       setRequestError(err.message || 'Failed to submit borrow request.');
     } finally {
@@ -254,6 +264,11 @@ export const ItemDetailPage: React.FC = () => {
                   <div className="text-xs">
                     <p className="font-semibold">Borrow Request Pending</p>
                     <p className="text-amber-700">Waiting for {item.owner?.full_name} to accept.</p>
+                    {existingRequest.borrower_phone && (
+                      <p className="text-[11px] text-amber-800/80 mt-0.5 font-medium">
+                        Your contact phone: {existingRequest.borrower_phone}
+                      </p>
+                    )}
                   </div>
                 </div>
                 <Link
@@ -270,6 +285,11 @@ export const ItemDetailPage: React.FC = () => {
                   <div className="text-xs">
                     <p className="font-semibold">Your Request Was Approved!</p>
                     <p className="text-emerald-700">Contact owner to pick up at {item.pickup_location}.</p>
+                    {existingRequest.borrower_phone && (
+                      <p className="text-[11px] text-emerald-800/80 mt-0.5 font-medium">
+                        Your contact phone: {existingRequest.borrower_phone}
+                      </p>
+                    )}
                   </div>
                 </div>
                 <Link
@@ -280,23 +300,45 @@ export const ItemDetailPage: React.FC = () => {
                 </Link>
               </div>
             ) : (
-              <button
-                onClick={handleBorrowRequest}
-                disabled={requesting}
-                className="w-full flex items-center justify-center gap-2 py-3.5 px-6 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm rounded-xl shadow-xs transition-colors cursor-pointer disabled:opacity-50"
-              >
-                {requesting ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Submitting Request...</span>
-                  </>
-                ) : (
-                  <>
-                    <Send className="w-4 h-4" />
-                    <span>Request to Borrow</span>
-                  </>
-                )}
-              </button>
+              <div className="space-y-3">
+                <div className="space-y-1.5 text-left">
+                  <label htmlFor="borrower-phone" className="block text-xs font-semibold text-slate-700">
+                    Your Contact Phone Number <span className="text-slate-400 font-normal">(for pickup coordination)</span>
+                  </label>
+                  <div className="relative">
+                    <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      id="borrower-phone"
+                      type="tel"
+                      placeholder="e.g. +1 (555) 234-5678"
+                      value={borrowerPhone}
+                      onChange={(e) => {
+                        setBorrowerPhone(e.target.value);
+                        if (requestError) setRequestError(null);
+                      }}
+                      className="w-full pl-9 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition-colors"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleBorrowRequest}
+                  disabled={requesting}
+                  className="w-full flex items-center justify-center gap-2 py-3.5 px-6 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm rounded-xl shadow-xs transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  {requesting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Submitting Request...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-4 h-4" />
+                      <span>Request to Borrow</span>
+                    </>
+                  )}
+                </button>
+              </div>
             )}
 
             {!user && (
