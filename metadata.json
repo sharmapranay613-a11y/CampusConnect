@@ -1,0 +1,6 @@
+{
+  "name": "CampusConnect",
+  "description": "Student-to-student campus item borrowing platform for textbooks, lab equipment, electronics, and study essentials.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
