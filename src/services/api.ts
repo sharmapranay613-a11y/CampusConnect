@@ -1,244 +1,15 @@
 import type { Profile, Item, BorrowRequest } from '../types/index.js';
 import { supabase, isSupabaseClientConfigured } from '../lib/supabase.js';
 
-// Initial Campus Seed Data for seamless instant loading and offline/initial resilience
-const SEED_PROFILES: Profile[] = [
-  {
-    id: 'std-a-uuid-1111',
-    full_name: 'Alex Rivera (Student A)',
-    email: 'alex.rivera@campus.edu',
-    department: 'Computer Science',
-    year: '3rd Year',
-    created_at: new Date(Date.now() - 86400000 * 5).toISOString(),
-  },
-  {
-    id: 'std-b-uuid-2222',
-    full_name: 'Bella Chen (Student B)',
-    email: 'bella.chen@campus.edu',
-    department: 'Electrical Engineering',
-    year: '2nd Year',
-    created_at: new Date(Date.now() - 86400000 * 3).toISOString(),
-  },
-];
-
-const SEED_PASSWORDS: Record<string, string> = {
-  'alex.rivera@campus.edu': 'password123',
-  'bella.chen@campus.edu': 'password123',
-};
-
-const SEED_ITEMS: Item[] = [
-  {
-    id: 'item-calc-001',
-    owner_id: 'std-a-uuid-1111',
-    title: 'Casio FX-991EX ClassWiz Scientific Calculator',
-    description: 'Ideal for semester exams, engineering mathematics, and matrix calculations. Comes with protective snap-on cover.',
-    category: 'Calculators & Electronics',
-    condition: 'Like New',
-    image_url: 'https://images.unsplash.com/photo-1594980596870-8aa52a78d8cd?auto=format&fit=crop&w=800&q=80',
-    pickup_location: 'Central Library, 2nd Floor Quiet Study Area',
-    borrow_duration: '1 week',
-    available: true,
-    created_at: new Date(Date.now() - 86400000 * 2).toISOString(),
-    updated_at: new Date(Date.now() - 86400000 * 2).toISOString(),
-    owner: {
-      id: 'std-a-uuid-1111',
-      full_name: 'Alex Rivera (Student A)',
-      email: 'alex.rivera@campus.edu',
-      department: 'Computer Science',
-      year: '3rd Year',
-    },
-  },
-  {
-    id: 'item-book-002',
-    owner_id: 'std-b-uuid-2222',
-    title: 'Introduction to Algorithms (CLRS 3rd Edition)',
-    description: 'Standard textbook for Data Structures and Algorithms. Clean pages with no ink markings.',
-    category: 'Textbooks',
-    condition: 'Good',
-    image_url: 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=800&q=80',
-    pickup_location: 'CS Department Block B, Near Lab 4',
-    borrow_duration: '2 weeks',
-    available: true,
-    created_at: new Date(Date.now() - 86400000).toISOString(),
-    updated_at: new Date(Date.now() - 86400000).toISOString(),
-    owner: {
-      id: 'std-b-uuid-2222',
-      full_name: 'Bella Chen (Student B)',
-      email: 'bella.chen@campus.edu',
-      department: 'Electrical Engineering',
-      year: '2nd Year',
-    },
-  },
-  {
-    id: 'item-draft-003',
-    owner_id: 'std-a-uuid-1111',
-    title: 'Engineering Mini Drafter & Drawing Sheet Container',
-    description: 'Complete with scale ruler clamp, protractor, and cylindrical carrying case. Essential for engineering graphics semester practicals.',
-    category: 'Drafting & Tools',
-    condition: 'Good',
-    image_url: 'https://images.unsplash.com/photo-1581291518857-4e27b48ff24e?auto=format&fit=crop&w=800&q=80',
-    pickup_location: 'Hostel 3 Common Room / Mechanical Workshop',
-    borrow_duration: '3 days',
-    available: true,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-    owner: {
-      id: 'std-a-uuid-1111',
-      full_name: 'Alex Rivera (Student A)',
-      email: 'alex.rivera@campus.edu',
-      department: 'Computer Science',
-      year: '3rd Year',
-    },
-  },
-];
-
-// Helper functions for persistent local store
-const STORAGE_KEYS = {
-  PROFILES: 'campusconnect_profiles',
-  PASSWORDS: 'campusconnect_passwords',
-  ITEMS: 'campusconnect_items',
-  REQUESTS: 'campusconnect_requests',
-  CURRENT_USER: 'campusconnect_current_user',
-};
-
-function getStored<T>(key: string, defaultValue: T): T {
-  try {
-    const item = localStorage.getItem(key);
-    if (!item) return defaultValue;
-    return JSON.parse(item) as T;
-  } catch {
-    return defaultValue;
+function getSupabaseClient() {
+  if (!isSupabaseClientConfigured || !supabase) {
+    throw new Error('Supabase client is not configured. Please check VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.');
   }
+  return supabase;
 }
 
-function setStored<T>(key: string, value: T): void {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch (e) {
-    console.warn('Storage setItem warning:', e);
-  }
-}
-
-// Initialize default data if empty
-function initializeStore(): void {
-  const profiles = getStored<Profile[]>(STORAGE_KEYS.PROFILES, []);
-  if (!profiles || profiles.length === 0) {
-    setStored(STORAGE_KEYS.PROFILES, SEED_PROFILES);
-  }
-
-  const passwords = getStored<Record<string, string>>(STORAGE_KEYS.PASSWORDS, {});
-  if (!passwords || Object.keys(passwords).length === 0) {
-    setStored(STORAGE_KEYS.PASSWORDS, SEED_PASSWORDS);
-  }
-
-  const items = getStored<Item[]>(STORAGE_KEYS.ITEMS, []);
-  if (!items || items.length === 0) {
-    setStored(STORAGE_KEYS.ITEMS, SEED_ITEMS);
-  }
-}
-
-initializeStore();
-
-function getLocalProfiles(): Profile[] {
-  return getStored<Profile[]>(STORAGE_KEYS.PROFILES, SEED_PROFILES);
-}
-
-function getLocalProfileById(id: string): Profile | null {
-  const profiles = getLocalProfiles();
-  return profiles.find((p) => p.id === id) || null;
-}
-
-function saveLocalProfile(profile: Profile, password?: string): void {
-  const profiles = getLocalProfiles();
-  const existingIdx = profiles.findIndex((p) => p.id === profile.id || p.email.toLowerCase() === profile.email.toLowerCase());
-  if (existingIdx >= 0) {
-    profiles[existingIdx] = { ...profiles[existingIdx], ...profile };
-  } else {
-    profiles.push(profile);
-  }
-  setStored(STORAGE_KEYS.PROFILES, profiles);
-
-  if (password) {
-    const passwords = getStored<Record<string, string>>(STORAGE_KEYS.PASSWORDS, SEED_PASSWORDS);
-    passwords[profile.email.toLowerCase()] = password;
-    setStored(STORAGE_KEYS.PASSWORDS, passwords);
-  }
-}
-
-function getLocalItems(): Item[] {
-  const items = getStored<Item[]>(STORAGE_KEYS.ITEMS, SEED_ITEMS);
-  // Ensure each item has its owner attached
-  return items.map((item) => {
-    if (!item.owner) {
-      const owner = getLocalProfileById(item.owner_id);
-      if (owner) {
-        return {
-          ...item,
-          owner: {
-            id: owner.id,
-            full_name: owner.full_name,
-            email: owner.email,
-            department: owner.department,
-            year: owner.year,
-          },
-        };
-      }
-    }
-    return item;
-  });
-}
-
-function saveLocalItem(item: Item): void {
-  const items = getLocalItems();
-  const idx = items.findIndex((i) => i.id === item.id);
-  if (idx >= 0) {
-    items[idx] = item;
-  } else {
-    items.unshift(item);
-  }
-  setStored(STORAGE_KEYS.ITEMS, items);
-}
-
-function deleteLocalItem(id: string): void {
-  const items = getLocalItems().filter((i) => i.id !== id);
-  setStored(STORAGE_KEYS.ITEMS, items);
-
-  const requests = getLocalRequests().filter((r) => r.item_id !== id);
-  setStored(STORAGE_KEYS.REQUESTS, requests);
-}
-
-function getLocalRequests(): BorrowRequest[] {
-  return getStored<BorrowRequest[]>(STORAGE_KEYS.REQUESTS, []);
-}
-
-function saveLocalRequest(req: BorrowRequest): void {
-  const requests = getLocalRequests();
-  const idx = requests.findIndex((r) => r.id === req.id);
-  if (idx >= 0) {
-    requests[idx] = req;
-  } else {
-    requests.unshift(req);
-  }
-  setStored(STORAGE_KEYS.REQUESTS, requests);
-}
-
-function getCurrentUser(): Profile | null {
-  return getStored<Profile | null>(STORAGE_KEYS.CURRENT_USER, null);
-}
-
-function setCurrentUser(user: Profile | null, token: string | null): void {
-  if (user) {
-    setStored(STORAGE_KEYS.CURRENT_USER, user);
-    if (token) localStorage.setItem('campusconnect_token', token);
-  } else {
-    localStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
-    localStorage.removeItem('campusconnect_token');
-  }
-}
-
-// Core API Service: Communicates directly with Supabase, with automatic client-side resilience
 export const api = {
-  // --- Authentication & Profiles ---
+  // --- Authentication ---
   auth: {
     async register(payload: {
       full_name: string;
@@ -247,59 +18,56 @@ export const api = {
       year: string;
       password: string;
     }): Promise<{ user: Profile; token: string; message: string }> {
+      const client = getSupabaseClient();
       const email = payload.email.toLowerCase().trim();
-      let userId = crypto.randomUUID ? crypto.randomUUID() : `std-${Date.now()}`;
-      let token = userId;
+      const fullName = payload.full_name.trim();
+      const department = payload.department.trim();
+      const year = payload.year.trim();
 
-      // 1. Try Supabase Auth
-      if (isSupabaseClientConfigured && supabase) {
-        try {
-          const { data: authData, error: authError } = await supabase.auth.signUp({
-            email,
-            password: payload.password,
-            options: {
-              data: {
-                full_name: payload.full_name.trim(),
-                department: payload.department.trim(),
-                year: payload.year.trim(),
-              },
-            },
-          });
+      const { data: authData, error: authError } = await client.auth.signUp({
+        email,
+        password: payload.password,
+        options: {
+          data: {
+            full_name: fullName,
+            department,
+            year,
+          },
+        },
+      });
 
-          if (!authError && authData.user) {
-            userId = authData.user.id;
-            token = authData.session?.access_token || authData.user.id;
-          }
-        } catch (e: any) {
-          console.warn('Supabase auth signup notice (using local sync):', e.message);
-        }
+      if (authError) {
+        throw new Error(authError.message);
       }
 
-      const profile: Profile = {
-        id: userId,
-        full_name: payload.full_name.trim(),
+      if (!authData.user) {
+        throw new Error('User creation failed. Please try again.');
+      }
+
+      const userProfile: Profile = {
+        id: authData.user.id,
+        full_name: fullName,
         email,
-        department: payload.department.trim(),
-        year: payload.year.trim(),
-        created_at: new Date().toISOString(),
+        department,
+        year,
+        created_at: authData.user.created_at || new Date().toISOString(),
       };
 
-      // 2. Try inserting profile into Supabase profiles table
-      if (isSupabaseClientConfigured && supabase) {
-        try {
-          await supabase.from('profiles').upsert(profile);
-        } catch (e: any) {
-          console.warn('Supabase profiles upsert notice:', e.message);
-        }
+      // Ensure profile is inserted into public.profiles
+      try {
+        await client.from('profiles').upsert(userProfile);
+      } catch (profileErr: any) {
+        console.warn('Profile upsert notice:', profileErr?.message);
       }
 
-      saveLocalProfile(profile, payload.password);
-      setCurrentUser(profile, token);
+      const token = authData.session?.access_token || authData.user.id;
 
       return {
-        user: profile,
+        user: userProfile,
         token,
-        message: 'Account created successfully.',
+        message: authData.session
+          ? 'Account created successfully.'
+          : 'Account created! If email confirmation is enabled on your project, please check your inbox to confirm.',
       };
     },
 
@@ -307,66 +75,46 @@ export const api = {
       email: string;
       password: string;
     }): Promise<{ user: Profile; token: string; message: string }> {
+      const client = getSupabaseClient();
       const email = payload.email.toLowerCase().trim();
-      let userProfile: Profile | null = null;
-      let token: string | null = null;
 
-      // 1. Try Supabase Auth
-      if (isSupabaseClientConfigured && supabase) {
+      const { data: authData, error: authError } = await client.auth.signInWithPassword({
+        email,
+        password: payload.password,
+      });
+
+      if (authError || !authData.user) {
+        throw new Error(authError?.message || 'Invalid college email or password.');
+      }
+
+      const token = authData.session?.access_token || authData.user.id;
+
+      // Fetch user profile from database
+      const { data: profileData, error: profileError } = await client
+        .from('profiles')
+        .select('*')
+        .eq('id', authData.user.id)
+        .maybeSingle();
+
+      let userProfile: Profile;
+      if (profileData && !profileError) {
+        userProfile = profileData as Profile;
+      } else {
+        // Fallback to auth metadata if profile row hasn't populated yet
+        userProfile = {
+          id: authData.user.id,
+          full_name: authData.user.user_metadata?.full_name || email.split('@')[0],
+          email,
+          department: authData.user.user_metadata?.department || 'Computer Science',
+          year: authData.user.user_metadata?.year || '1st Year',
+          created_at: authData.user.created_at || new Date().toISOString(),
+        };
         try {
-          const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-            email,
-            password: payload.password,
-          });
-
-          if (!authError && authData.user) {
-            token = authData.session?.access_token || authData.user.id;
-
-            // Fetch profile
-            const { data: pData } = await supabase
-              .from('profiles')
-              .select('*')
-              .eq('id', authData.user.id)
-              .maybeSingle();
-
-            if (pData) {
-              userProfile = pData as Profile;
-            } else {
-              userProfile = {
-                id: authData.user.id,
-                full_name: authData.user.user_metadata?.full_name || email.split('@')[0],
-                email,
-                department: authData.user.user_metadata?.department || 'General',
-                year: authData.user.user_metadata?.year || 'Student',
-                created_at: authData.user.created_at || new Date().toISOString(),
-              };
-            }
-          }
-        } catch (e: any) {
-          console.warn('Supabase signInWithPassword fallback:', e.message);
+          await client.from('profiles').upsert(userProfile);
+        } catch {
+          // Ignore
         }
       }
-
-      // 2. Local fallback if Supabase auth was not hit or user is demo/offline
-      if (!userProfile) {
-        const passwords = getStored<Record<string, string>>(STORAGE_KEYS.PASSWORDS, SEED_PASSWORDS);
-        const storedPw = passwords[email];
-        if (storedPw && storedPw === payload.password) {
-          const profiles = getLocalProfiles();
-          const match = profiles.find((p) => p.email.toLowerCase() === email);
-          if (match) {
-            userProfile = match;
-            token = match.id;
-          }
-        }
-      }
-
-      if (!userProfile || !token) {
-        throw new Error('Invalid college email or password.');
-      }
-
-      saveLocalProfile(userProfile);
-      setCurrentUser(userProfile, token);
 
       return {
         user: userProfile,
@@ -376,138 +124,107 @@ export const api = {
     },
 
     async getProfile(): Promise<{ user: Profile }> {
-      // 1. Check Supabase session
+      const client = getSupabaseClient();
+      const { data: { user: authUser }, error: userError } = await client.auth.getUser();
+
+      if (userError || !authUser) {
+        throw new Error('Unauthorized');
+      }
+
+      const { data: profileData, error: profileError } = await client
+        .from('profiles')
+        .select('*')
+        .eq('id', authUser.id)
+        .maybeSingle();
+
+      if (profileData && !profileError) {
+        return { user: profileData as Profile };
+      }
+
+      const fallbackProfile: Profile = {
+        id: authUser.id,
+        full_name: authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || 'Student',
+        email: authUser.email || '',
+        department: authUser.user_metadata?.department || 'General',
+        year: authUser.user_metadata?.year || 'Student',
+        created_at: authUser.created_at || new Date().toISOString(),
+      };
+
+      try {
+        await client.from('profiles').upsert(fallbackProfile);
+      } catch {
+        // Ignore
+      }
+
+      return { user: fallbackProfile };
+    },
+
+    async logout(): Promise<void> {
       if (isSupabaseClientConfigured && supabase) {
-        try {
-          const { data: sessionData } = await supabase.auth.getSession();
-          if (sessionData?.session?.user) {
-            const { data: pData } = await supabase
-              .from('profiles')
-              .select('*')
-              .eq('id', sessionData.session.user.id)
-              .maybeSingle();
-
-            if (pData) {
-              saveLocalProfile(pData as Profile);
-              setCurrentUser(pData as Profile, sessionData.session.access_token);
-              return { user: pData as Profile };
-            }
-          }
-        } catch (e) {
-          console.warn('Supabase getProfile session check notice:', e);
-        }
+        await supabase.auth.signOut();
       }
-
-      // 2. Local stored user
-      const current = getCurrentUser();
-      if (current) {
-        return { user: current };
-      }
-
-      // 3. Check token against local profiles
-      const token = localStorage.getItem('campusconnect_token');
-      if (token) {
-        const profile = getLocalProfileById(token);
-        if (profile) {
-          setCurrentUser(profile, token);
-          return { user: profile };
-        }
-      }
-
-      throw new Error('Unauthorized');
     },
   },
 
-  // --- Items Management ---
+  // --- Items Management (Single Source of Truth: Supabase public.items) ---
   items: {
     async getAll(params?: { search?: string; category?: string; owner_id?: string }): Promise<Item[]> {
-      let items: Item[] = [];
+      const client = getSupabaseClient();
 
-      // Try Supabase directly from frontend
-      if (isSupabaseClientConfigured && supabase) {
-        try {
-          let query = supabase
-            .from('items')
-            .select('*, profiles:owner_id(id, full_name, email, department, year)')
-            .order('created_at', { ascending: false });
+      let query = client
+        .from('items')
+        .select('*, profiles:owner_id(id, full_name, email, department, year)')
+        .order('created_at', { ascending: false });
 
-          if (params?.category && params.category !== 'All') {
-            query = query.eq('category', params.category);
-          }
-          if (params?.owner_id) {
-            query = query.eq('owner_id', params.owner_id);
-          }
-
-          const { data, error } = await query;
-          if (!error && data && data.length > 0) {
-            items = data.map((d: any) => ({
-              ...d,
-              owner: d.profiles || getLocalProfileById(d.owner_id) || undefined,
-            }));
-            // Update local cache
-            items.forEach((it) => saveLocalItem(it));
-          }
-        } catch (e) {
-          console.warn('Supabase items query fallback to local cache:', e);
-        }
-      }
-
-      // If Supabase returned no items or table not yet configured, use local items store
-      if (items.length === 0) {
-        items = getLocalItems();
-      }
-
-      // Apply client-side filters
-      let result = items;
-      if (params?.owner_id) {
-        result = result.filter((i) => i.owner_id === params.owner_id);
-      }
       if (params?.category && params.category !== 'All') {
-        result = result.filter((i) => i.category.toLowerCase() === params.category!.toLowerCase());
+        query = query.eq('category', params.category);
       }
+      if (params?.owner_id) {
+        query = query.eq('owner_id', params.owner_id);
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        throw new Error(`Failed to load items from database: ${error.message}`);
+      }
+
+      let items = (data || []).map((d: any) => ({
+        ...d,
+        owner: d.profiles || undefined,
+      })) as Item[];
+
       if (params?.search) {
         const q = params.search.toLowerCase().trim();
-        result = result.filter(
+        items = items.filter(
           (i) =>
             i.title.toLowerCase().includes(q) ||
             i.description.toLowerCase().includes(q) ||
-            i.pickup_location.toLowerCase().includes(q)
+            i.pickup_location.toLowerCase().includes(q) ||
+            i.owner?.full_name?.toLowerCase().includes(q)
         );
       }
 
-      return result.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      return items;
     },
 
     async getById(id: string): Promise<Item> {
-      // 1. Try Supabase
-      if (isSupabaseClientConfigured && supabase) {
-        try {
-          const { data, error } = await supabase
-            .from('items')
-            .select('*, profiles:owner_id(id, full_name, email, department, year)')
-            .eq('id', id)
-            .maybeSingle();
+      const client = getSupabaseClient();
 
-          if (!error && data) {
-            const item: Item = {
-              ...data,
-              owner: data.profiles || getLocalProfileById(data.owner_id) || undefined,
-            };
-            saveLocalItem(item);
-            return item;
-          }
-        } catch (e) {
-          console.warn('Supabase getById fallback to local:', e);
-        }
+      const { data, error } = await client
+        .from('items')
+        .select('*, profiles:owner_id(id, full_name, email, department, year)')
+        .eq('id', id)
+        .single();
+
+      if (error || !data) {
+        throw new Error(error?.message || 'Listing not found in database.');
       }
 
-      // 2. Local store
-      const localItem = getLocalItems().find((i) => i.id === id);
-      if (localItem) {
-        return localItem;
-      }
-
-      throw new Error('Listing not found.');
+      return {
+        ...data,
+        owner: data.profiles || undefined,
+      } as Item;
     },
 
     async create(itemData: {
@@ -519,68 +236,55 @@ export const api = {
       pickup_location: string;
       borrow_duration: string;
     }): Promise<Item> {
-      const user = getCurrentUser();
-      if (!user) {
-        throw new Error('You must be logged in to list an item.');
+      const client = getSupabaseClient();
+
+      const { data: { user }, error: userError } = await client.auth.getUser();
+      if (userError || !user) {
+        throw new Error('You must be logged in to create an item listing.');
       }
 
-      const id = crypto.randomUUID ? crypto.randomUUID() : `item-${Date.now()}`;
-      const now = new Date().toISOString();
+      // Ensure owner profile exists in public.profiles to satisfy foreign key constraint
+      const { data: existingProfile } = await client
+        .from('profiles')
+        .select('id')
+        .eq('id', user.id)
+        .maybeSingle();
 
-      const newItem: Item = {
-        id,
-        owner_id: user.id,
-        title: itemData.title.trim(),
-        description: itemData.description.trim(),
-        category: itemData.category.trim(),
-        condition: itemData.condition.trim(),
-        image_url: itemData.image_url?.trim() || '',
-        pickup_location: itemData.pickup_location.trim(),
-        borrow_duration: itemData.borrow_duration.trim(),
-        available: true,
-        created_at: now,
-        updated_at: now,
-        owner: {
+      if (!existingProfile) {
+        await client.from('profiles').upsert({
           id: user.id,
-          full_name: user.full_name,
-          email: user.email,
-          department: user.department,
-          year: user.year,
-        },
-      };
-
-      // 1. Try Supabase
-      if (isSupabaseClientConfigured && supabase) {
-        try {
-          const { data, error } = await supabase
-            .from('items')
-            .insert({
-              id: newItem.id,
-              owner_id: newItem.owner_id,
-              title: newItem.title,
-              description: newItem.description,
-              category: newItem.category,
-              condition: newItem.condition,
-              image_url: newItem.image_url,
-              pickup_location: newItem.pickup_location,
-              borrow_duration: newItem.borrow_duration,
-              available: newItem.available,
-              created_at: newItem.created_at,
-              updated_at: newItem.updated_at,
-            })
-            .select()
-            .single();
-
-          if (!error && data) {
-            newItem.id = data.id;
-          }
-        } catch (e) {
-          console.warn('Supabase create item fallback to local:', e);
-        }
+          full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'Student',
+          email: user.email || '',
+          department: user.user_metadata?.department || 'Engineering',
+          year: user.user_metadata?.year || '1st Year',
+          created_at: user.created_at || new Date().toISOString(),
+        });
       }
 
-      saveLocalItem(newItem);
-      return newItem;
+      const { data, error } = await client
+        .from('items')
+        .insert({
+          owner_id: user.id,
+          title: itemData.title.trim(),
+          description: itemData.description.trim(),
+          category: itemData.category.trim(),
+          condition: itemData.condition.trim(),
+          image_url: itemData.image_url?.trim() || '',
+          pickup_location: itemData.pickup_location.trim(),
+          borrow_duration: itemData.borrow_duration.trim(),
+          available: true,
+        })
+        .select('*, profiles:owner_id(id, full_name, email, department, year)')
+        .single();
+
+      if (error || !data) {
+        throw new Error(`Failed to save item to database: ${error?.message || 'Unknown database error'}`);
+      }
+
+      return {
+        ...data,
+        owner: data.profiles || undefined,
+      } as Item;
     },
 
     async update(
@@ -596,58 +300,54 @@ export const api = {
         available: boolean;
       }>
     ): Promise<Item> {
-      const user = getCurrentUser();
-      const existing = await api.items.getById(id);
-      if (!existing) throw new Error('Item not found.');
-      if (user && existing.owner_id !== user.id) {
-        throw new Error('Only the item owner can modify this listing.');
+      const client = getSupabaseClient();
+      const { data: { user }, error: userError } = await client.auth.getUser();
+      if (userError || !user) throw new Error('Unauthorized');
+
+      const { data, error } = await client
+        .from('items')
+        .update({
+          ...itemData,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', id)
+        .eq('owner_id', user.id)
+        .select('*, profiles:owner_id(id, full_name, email, department, year)')
+        .single();
+
+      if (error || !data) {
+        throw new Error(`Failed to update item: ${error?.message || 'Database error'}`);
       }
 
-      const updated: Item = {
-        ...existing,
-        ...itemData,
-        updated_at: new Date().toISOString(),
-      };
-
-      if (isSupabaseClientConfigured && supabase) {
-        try {
-          await supabase
-            .from('items')
-            .update({ ...itemData, updated_at: updated.updated_at })
-            .eq('id', id);
-        } catch (e) {
-          console.warn('Supabase update item fallback:', e);
-        }
-      }
-
-      saveLocalItem(updated);
-      return updated;
+      return {
+        ...data,
+        owner: data.profiles || undefined,
+      } as Item;
     },
 
     async delete(id: string): Promise<void> {
-      const user = getCurrentUser();
-      const existing = await api.items.getById(id);
-      if (user && existing.owner_id !== user.id) {
-        throw new Error('Only the item owner can delete this listing.');
-      }
+      const client = getSupabaseClient();
+      const { data: { user }, error: userError } = await client.auth.getUser();
+      if (userError || !user) throw new Error('Unauthorized');
 
-      if (isSupabaseClientConfigured && supabase) {
-        try {
-          await supabase.from('items').delete().eq('id', id);
-        } catch (e) {
-          console.warn('Supabase delete item fallback:', e);
-        }
-      }
+      const { error } = await client
+        .from('items')
+        .delete()
+        .eq('id', id)
+        .eq('owner_id', user.id);
 
-      deleteLocalItem(id);
+      if (error) {
+        throw new Error(`Failed to delete item: ${error.message}`);
+      }
     },
   },
 
-  // --- Borrow Requests & Phone Number Coordination ---
+  // --- Borrow Requests (Single Source of Truth: Supabase public.borrow_requests) ---
   requests: {
     async create(itemId: string, borrowerPhone?: string): Promise<BorrowRequest> {
-      const user = getCurrentUser();
-      if (!user) {
+      const client = getSupabaseClient();
+      const { data: { user }, error: userError } = await client.auth.getUser();
+      if (userError || !user) {
         throw new Error('You must be logged in to request an item.');
       }
 
@@ -664,221 +364,171 @@ export const api = {
 
       const phone = borrowerPhone?.trim() || '';
 
-      const id = crypto.randomUUID ? crypto.randomUUID() : `req-${Date.now()}`;
-      const now = new Date().toISOString();
+      // Ensure borrower profile exists
+      const { data: existingProfile } = await client
+        .from('profiles')
+        .select('id')
+        .eq('id', user.id)
+        .maybeSingle();
 
-      const newRequest: BorrowRequest = {
-        id,
-        item_id: itemId,
-        borrower_id: user.id,
-        owner_id: item.owner_id,
-        borrower_phone: phone,
-        phone_number: phone,
-        status: 'pending',
-        created_at: now,
-        updated_at: now,
-        item,
-        borrower: {
+      if (!existingProfile) {
+        await client.from('profiles').upsert({
           id: user.id,
-          full_name: user.full_name,
-          email: user.email,
-          department: user.department,
-          year: user.year,
-        },
-        owner: item.owner,
-      };
-
-      // 1. Try Supabase directly
-      if (isSupabaseClientConfigured && supabase) {
-        try {
-          const { data, error } = await supabase
-            .from('borrow_requests')
-            .insert({
-              id: newRequest.id,
-              item_id: newRequest.item_id,
-              borrower_id: newRequest.borrower_id,
-              owner_id: newRequest.owner_id,
-              borrower_phone: phone,
-              status: 'pending',
-              created_at: now,
-              updated_at: now,
-            })
-            .select()
-            .single();
-
-          if (!error && data) {
-            newRequest.id = data.id;
-          }
-        } catch (e) {
-          console.warn('Supabase create borrow_request fallback to local:', e);
-        }
+          full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'Student',
+          email: user.email || '',
+          department: user.user_metadata?.department || 'General',
+          year: user.user_metadata?.year || 'Student',
+          created_at: user.created_at || new Date().toISOString(),
+        });
       }
 
-      saveLocalRequest(newRequest);
-      return newRequest;
+      const { data, error } = await client
+        .from('borrow_requests')
+        .insert({
+          item_id: itemId,
+          borrower_id: user.id,
+          owner_id: item.owner_id,
+          borrower_phone: phone,
+          status: 'pending',
+        })
+        .select('*, item:items(*), borrower:profiles!borrower_id(*), owner:profiles!owner_id(*)')
+        .single();
+
+      if (error || !data) {
+        throw new Error(`Failed to create borrow request: ${error?.message || 'Database error'}`);
+      }
+
+      return {
+        ...data,
+        borrower_phone: data.borrower_phone,
+        phone_number: data.borrower_phone,
+        item: data.item,
+        borrower: data.borrower,
+        owner: data.owner,
+      } as BorrowRequest;
     },
 
     async getMyRequests(): Promise<BorrowRequest[]> {
-      const user = getCurrentUser();
+      const client = getSupabaseClient();
+      const { data: { user } } = await client.auth.getUser();
       if (!user) return [];
 
-      let list: BorrowRequest[] = [];
+      const { data, error } = await client
+        .from('borrow_requests')
+        .select('*, item:items(*), borrower:profiles!borrower_id(*), owner:profiles!owner_id(*)')
+        .eq('borrower_id', user.id)
+        .order('created_at', { ascending: false });
 
-      if (isSupabaseClientConfigured && supabase) {
-        try {
-          const { data, error } = await supabase
-            .from('borrow_requests')
-            .select('*, item:items(*), borrower:profiles!borrower_id(*), owner:profiles!owner_id(*)')
-            .eq('borrower_id', user.id)
-            .order('created_at', { ascending: false });
-
-          if (!error && data && data.length > 0) {
-            list = data.map((d: any) => ({
-              ...d,
-              borrower_phone: d.borrower_phone || d.phone_number,
-              phone_number: d.borrower_phone || d.phone_number,
-              item: d.item,
-              borrower: d.borrower,
-              owner: d.owner,
-            }));
-            list.forEach((r) => saveLocalRequest(r));
-          }
-        } catch (e) {
-          console.warn('Supabase getMyRequests fallback to local store:', e);
-        }
+      if (error) {
+        throw new Error(`Failed to fetch my requests: ${error.message}`);
       }
 
-      if (list.length === 0) {
-        list = getLocalRequests().filter((r) => r.borrower_id === user.id);
-      }
-
-      return list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      return (data || []).map((d: any) => ({
+        ...d,
+        borrower_phone: d.borrower_phone,
+        phone_number: d.borrower_phone,
+        item: d.item,
+        borrower: d.borrower,
+        owner: d.owner,
+      })) as BorrowRequest[];
     },
 
     async getIncomingRequests(): Promise<BorrowRequest[]> {
-      const user = getCurrentUser();
+      const client = getSupabaseClient();
+      const { data: { user } } = await client.auth.getUser();
       if (!user) return [];
 
-      let list: BorrowRequest[] = [];
+      const { data, error } = await client
+        .from('borrow_requests')
+        .select('*, item:items(*), borrower:profiles!borrower_id(*), owner:profiles!owner_id(*)')
+        .eq('owner_id', user.id)
+        .order('created_at', { ascending: false });
 
-      if (isSupabaseClientConfigured && supabase) {
-        try {
-          const { data, error } = await supabase
-            .from('borrow_requests')
-            .select('*, item:items(*), borrower:profiles!borrower_id(*), owner:profiles!owner_id(*)')
-            .eq('owner_id', user.id)
-            .order('created_at', { ascending: false });
-
-          if (!error && data && data.length > 0) {
-            list = data.map((d: any) => ({
-              ...d,
-              borrower_phone: d.borrower_phone || d.phone_number,
-              phone_number: d.borrower_phone || d.phone_number,
-              item: d.item,
-              borrower: d.borrower,
-              owner: d.owner,
-            }));
-            list.forEach((r) => saveLocalRequest(r));
-          }
-        } catch (e) {
-          console.warn('Supabase getIncomingRequests fallback to local store:', e);
-        }
+      if (error) {
+        throw new Error(`Failed to fetch incoming requests: ${error.message}`);
       }
 
-      if (list.length === 0) {
-        list = getLocalRequests().filter((r) => r.owner_id === user.id);
+      return (data || []).map((d: any) => ({
+        ...d,
+        borrower_phone: d.borrower_phone,
+        phone_number: d.borrower_phone,
+        item: d.item,
+        borrower: d.borrower,
+        owner: d.owner,
+      })) as BorrowRequest[];
+    },
+
+    async updateStatus(requestId: string, status: 'approved' | 'rejected'): Promise<BorrowRequest> {
+      const client = getSupabaseClient();
+      const { data: { user }, error: userError } = await client.auth.getUser();
+      if (userError || !user) throw new Error('Unauthorized');
+
+      const { data, error } = await client
+        .from('borrow_requests')
+        .update({
+          status,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', requestId)
+        .eq('owner_id', user.id)
+        .select('*, item:items(*), borrower:profiles!borrower_id(*), owner:profiles!owner_id(*)')
+        .single();
+
+      if (error || !data) {
+        throw new Error(`Failed to update request status: ${error?.message || 'Database error'}`);
       }
 
-      return list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      // If approved, update item availability
+      if (status === 'approved') {
+        await client
+          .from('items')
+          .update({ available: false, updated_at: new Date().toISOString() })
+          .eq('id', data.item_id);
+      }
+
+      return {
+        ...data,
+        borrower_phone: data.borrower_phone,
+        phone_number: data.borrower_phone,
+        item: data.item,
+        borrower: data.borrower,
+        owner: data.owner,
+      } as BorrowRequest;
     },
 
     async approve(requestId: string): Promise<BorrowRequest> {
-      const requests = getLocalRequests();
-      const req = requests.find((r) => r.id === requestId);
-      if (!req) throw new Error('Borrow request not found.');
-
-      req.status = 'approved';
-      req.updated_at = new Date().toISOString();
-
-      // 1. Try Supabase
-      if (isSupabaseClientConfigured && supabase) {
-        try {
-          await supabase
-            .from('borrow_requests')
-            .update({ status: 'approved', updated_at: req.updated_at })
-            .eq('id', requestId);
-
-          await supabase
-            .from('items')
-            .update({ available: false, updated_at: req.updated_at })
-            .eq('id', req.item_id);
-        } catch (e) {
-          console.warn('Supabase approve request notice:', e);
-        }
-      }
-
-      // 2. Update local state
-      saveLocalRequest(req);
-      const item = getLocalItems().find((i) => i.id === req.item_id);
-      if (item) {
-        item.available = false;
-        item.updated_at = req.updated_at;
-        saveLocalItem(item);
-      }
-
-      return req;
+      return this.updateStatus(requestId, 'approved');
     },
 
     async reject(requestId: string): Promise<BorrowRequest> {
-      const requests = getLocalRequests();
-      const req = requests.find((r) => r.id === requestId);
-      if (!req) throw new Error('Borrow request not found.');
-
-      req.status = 'rejected';
-      req.updated_at = new Date().toISOString();
-
-      // 1. Try Supabase
-      if (isSupabaseClientConfigured && supabase) {
-        try {
-          await supabase
-            .from('borrow_requests')
-            .update({ status: 'rejected', updated_at: req.updated_at })
-            .eq('id', requestId);
-        } catch (e) {
-          console.warn('Supabase reject request notice:', e);
-        }
-      }
-
-      saveLocalRequest(req);
-      return req;
+      return this.updateStatus(requestId, 'rejected');
     },
   },
 
   // --- Image Storage ---
   async uploadImage(file: File): Promise<string> {
-    // 1. Try Supabase Storage bucket 'item-images'
     if (isSupabaseClientConfigured && supabase) {
       try {
+        const { data: { user } } = await supabase.auth.getUser();
         const ext = file.name.split('.').pop() || 'jpg';
-        const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${ext}`;
-        const filePath = `items/${fileName}`;
+        const fileName = `${user?.id || 'anon'}/${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${ext}`;
 
         const { error: uploadError } = await supabase.storage
           .from('item-images')
-          .upload(filePath, file, { cacheControl: '3600', upsert: false });
+          .upload(fileName, file, { cacheControl: '3600', upsert: false });
 
         if (!uploadError) {
-          const { data: urlData } = supabase.storage.from('item-images').getPublicUrl(filePath);
+          const { data: urlData } = supabase.storage.from('item-images').getPublicUrl(fileName);
           if (urlData?.publicUrl) {
             return urlData.publicUrl;
           }
         }
       } catch (err) {
-        console.warn('Supabase storage upload notice, utilizing client image compressor:', err);
+        console.warn('Supabase storage upload notice, using image compressor:', err);
       }
     }
 
-    // 2. High-performance client-side image compressor & reader
+    // High-performance client-side image compressor & reader
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = (e) => {

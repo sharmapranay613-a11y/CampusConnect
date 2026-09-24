@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { Profile } from '../types/index.js';
 import { api } from '../services/api.js';
+import { supabase } from '../lib/supabase.js';
 
 interface AuthContextType {
   user: Profile | null;
@@ -14,7 +15,7 @@ interface AuthContextType {
     year: string;
     password: string;
   }) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   switchDemoUser: (role: 'alex' | 'bella') => Promise<void>;
 }
 
@@ -22,34 +23,58 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<Profile | null>(null);
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem('campusconnect_token'));
+  const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
-    async function loadUser() {
-      const storedToken = localStorage.getItem('campusconnect_token');
-      if (!storedToken) {
+    let isMounted = true;
+
+    async function initSession() {
+      if (!supabase) {
         setLoading(false);
         return;
       }
       try {
-        const { user: profile } = await api.auth.getProfile();
-        setUser(profile);
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session && isMounted) {
+          setToken(session.access_token);
+          const { user: profile } = await api.auth.getProfile();
+          if (isMounted) setUser(profile);
+        }
       } catch (err) {
-        console.warn('Could not restore user session:', err);
-        localStorage.removeItem('campusconnect_token');
-        setUser(null);
-        setToken(null);
+        console.warn('Session check notice:', err);
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     }
-    loadUser();
+
+    initSession();
+
+    const { data: authListener } = supabase?.auth.onAuthStateChange(async (event, session) => {
+      if (!isMounted) return;
+      if (session?.user) {
+        setToken(session.access_token);
+        try {
+          const { user: profile } = await api.auth.getProfile();
+          if (isMounted) setUser(profile);
+        } catch {
+          // Ignore
+        }
+      } else {
+        setToken(null);
+        setUser(null);
+      }
+      setLoading(false);
+    }) || { data: { subscription: { unsubscribe: () => {} } } };
+
+    return () => {
+      isMounted = false;
+      authListener?.subscription?.unsubscribe();
+    };
   }, []);
 
   const login = async (email: string, password: string) => {
     const res = await api.auth.login({ email, password });
-    localStorage.setItem('campusconnect_token', res.token);
     setToken(res.token);
     setUser(res.user);
   };
@@ -62,13 +87,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     password: string;
   }) => {
     const res = await api.auth.register(data);
-    localStorage.setItem('campusconnect_token', res.token);
     setToken(res.token);
     setUser(res.user);
   };
 
-  const logout = () => {
-    localStorage.removeItem('campusconnect_token');
+  const logout = async () => {
+    await api.auth.logout();
     setToken(null);
     setUser(null);
   };

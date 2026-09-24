@@ -142,11 +142,16 @@ export const BrowsePage: React.FC = () => {
           <p className="text-sm font-medium">Loading campus items...</p>
         </div>
       ) : error ? (
-        <div className="p-6 bg-red-50 text-red-700 rounded-xl text-center">
-          <p className="font-semibold">{error}</p>
+        <div className="p-6 bg-red-50 text-red-700 rounded-xl text-center max-w-xl mx-auto border border-red-200">
+          <p className="font-semibold text-sm">{error}</p>
+          {error.includes('schema cache') && (
+            <p className="mt-2 text-xs text-red-600 leading-relaxed">
+              Please execute the SQL script in <code className="font-mono bg-red-100 px-1 py-0.5 rounded">supabase/schema.sql</code> in your Supabase SQL Editor to initialize the database tables and security policies.
+            </p>
+          )}
           <button
             onClick={fetchItems}
-            className="mt-3 px-4 py-1.5 bg-red-600 text-white rounded-lg text-xs font-semibold hover:bg-red-700"
+            className="mt-4 px-4 py-1.5 bg-red-600 text-white rounded-lg text-xs font-semibold hover:bg-red-700 cursor-pointer"
           >
             Retry
           </button>
