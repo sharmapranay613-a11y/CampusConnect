@@ -28,7 +28,18 @@ export const BrowsePage: React.FC = () => {
 
   useEffect(() => {
     fetchItems();
-  }, [selectedCategory]);
+
+    // Re-fetch on mobile when user switches back to the browser tab
+    const handleVisibilityChange = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        fetchItems();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [selectedCategory, user?.id]);
 
   const fetchItems = async () => {
     try {
@@ -36,10 +47,10 @@ export const BrowsePage: React.FC = () => {
       setError(null);
       const data = await api.items.getAll({
         category: selectedCategory === 'All' ? undefined : selectedCategory,
-        search: searchTerm.trim() ? searchTerm.trim() : undefined,
       });
       setItems(data);
     } catch (err: any) {
+      console.error('[CampusConnect] BrowsePage fetchItems error:', err);
       setError(err.message || 'Failed to load campus items');
     } finally {
       setLoading(false);
@@ -48,7 +59,6 @@ export const BrowsePage: React.FC = () => {
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    fetchItems();
   };
 
   const filteredItems = items.filter((item) => {

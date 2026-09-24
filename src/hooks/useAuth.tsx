@@ -35,14 +35,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError) {
+          console.warn('[CampusConnect] getSession warning on mobile:', sessionError.message);
+        }
         if (session && isMounted) {
           setToken(session.access_token);
-          const { user: profile } = await api.auth.getProfile();
-          if (isMounted) setUser(profile);
+          try {
+            const { user: profile } = await api.auth.getProfile(session.user);
+            if (isMounted) setUser(profile);
+          } catch (profileErr: any) {
+            console.warn('[CampusConnect] Profile fetch fallback:', profileErr?.message);
+            if (isMounted && session.user) {
+              setUser({
+                id: session.user.id,
+                full_name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'Student',
+                email: session.user.email || '',
+                department: session.user.user_metadata?.department || 'General',
+                year: session.user.user_metadata?.year || 'Student',
+                created_at: session.user.created_at || new Date().toISOString(),
+              });
+            }
+          }
         }
-      } catch (err) {
-        console.warn('Session check notice:', err);
+      } catch (err: any) {
+        console.warn('[CampusConnect] Session init notice:', err?.message || err);
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -55,10 +72,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (session?.user) {
         setToken(session.access_token);
         try {
-          const { user: profile } = await api.auth.getProfile();
+          const { user: profile } = await api.auth.getProfile(session.user);
           if (isMounted) setUser(profile);
         } catch {
-          // Ignore
+          if (isMounted) {
+            setUser({
+              id: session.user.id,
+              full_name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'Student',
+              email: session.user.email || '',
+              department: session.user.user_metadata?.department || 'General',
+              year: session.user.user_metadata?.year || 'Student',
+              created_at: session.user.created_at || new Date().toISOString(),
+            });
+          }
         }
       } else {
         setToken(null);

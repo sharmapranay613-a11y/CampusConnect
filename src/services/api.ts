@@ -123,12 +123,16 @@ export const api = {
       };
     },
 
-    async getProfile(): Promise<{ user: Profile }> {
+    async getProfile(providedUser?: any): Promise<{ user: Profile }> {
       const client = getSupabaseClient();
-      const { data: { user: authUser }, error: userError } = await client.auth.getUser();
+      let authUser = providedUser;
 
-      if (userError || !authUser) {
-        throw new Error('Unauthorized');
+      if (!authUser) {
+        const { data: { user }, error: userError } = await client.auth.getUser();
+        if (userError || !user) {
+          throw new Error('Unauthorized');
+        }
+        authUser = user;
       }
 
       const { data: profileData, error: profileError } = await client
@@ -152,8 +156,8 @@ export const api = {
 
       try {
         await client.from('profiles').upsert(fallbackProfile);
-      } catch {
-        // Ignore
+      } catch (err: any) {
+        console.warn('[CampusConnect] Profile upsert notice:', err?.message || err);
       }
 
       return { user: fallbackProfile };
@@ -183,11 +187,54 @@ export const api = {
         query = query.eq('owner_id', params.owner_id);
       }
 
-      const { data, error } = await query;
+      let { data, error } = await query;
 
+      // Resilient fallback: if relational foreign key join errors, load items directly and enrich profiles
       if (error) {
-        throw new Error(`Failed to load items from database: ${error.message}`);
+        console.warn('[CampusConnect] Relational items join failed, using direct query fallback:', error.message);
+        let fallbackQuery = client
+          .from('items')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (params?.category && params.category !== 'All') {
+          fallbackQuery = fallbackQuery.eq('category', params.category);
+        }
+        if (params?.owner_id) {
+          fallbackQuery = fallbackQuery.eq('owner_id', params.owner_id);
+        }
+
+        const fallbackRes = await fallbackQuery;
+        if (fallbackRes.error) {
+          console.error('[CampusConnect] Direct items query also failed:', fallbackRes.error);
+          throw new Error(`Failed to load items from database: ${fallbackRes.error.message}`);
+        }
+
+        data = fallbackRes.data || [];
+
+        // Enrich items with profiles if available
+        if (data && data.length > 0) {
+          const ownerIds = [...new Set(data.map((d: any) => d.owner_id).filter(Boolean))];
+          if (ownerIds.length > 0) {
+            try {
+              const { data: profilesData } = await client
+                .from('profiles')
+                .select('id, full_name, email, department, year')
+                .in('id', ownerIds);
+
+              const profileMap = new Map((profilesData || []).map((p: any) => [p.id, p]));
+              data = data.map((d: any) => ({
+                ...d,
+                profiles: profileMap.get(d.owner_id),
+              }));
+            } catch (pErr) {
+              console.warn('[CampusConnect] Could not enrich profiles in fallback:', pErr);
+            }
+          }
+        }
       }
+
+      console.info(`[CampusConnect] items.getAll loaded ${data?.length || 0} items from Supabase.`);
 
       let items = (data || []).map((d: any) => ({
         ...d,
